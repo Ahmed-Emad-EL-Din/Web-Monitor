@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/dashboardFragment">
+
+    <fragment
+        android:id="@+id/dashboardFragment"
+        android:name="com.example.DashboardFragment"
+        android:label="Dashboard"
+        tools:layout="@layout/fragment_dashboard">
+        <action
+            android:id="@+id/action_dashboardFragment_to_settingsFragment"
+            app:destination="@id/settingsFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/browserFragment"
+        android:name="com.example.BrowserFragment"
+        android:label="Browser"
+        tools:layout="@layout/fragment_browser" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.example.SettingsFragment"
+        android:label="Settings"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/changeDetailsFragment"
+        android:name="com.example.ChangeDetailsFragment"
+        android:label="Change Details"
+        tools:layout="@layout/fragment_change_details">
+        <argument
+            android:name="ruleId"
+            app:argType="integer" />
+    </fragment>
+</navigation>
