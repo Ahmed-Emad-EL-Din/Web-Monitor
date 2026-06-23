@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backgrounds: Deep Slate -->
+    <color name="bg_soft_off_white">#0F172A</color>
+
+    <!-- Surface (Cards/Dialogs): Dark Surface -->
+    <color name="surface_white">#1E293B</color>
+
+    <!-- Primary Accent: Soft Indigo -->
+    <color name="primary_accent">#818CF8</color> <!-- Lighten for dark mode? Or keep #6366F1 -->
+
+    <!-- Text Primary: Light -->
+    <color name="text_primary">#F8FAFC</color>
+
+    <!-- Text Secondary: Muted Light -->
+    <color name="text_secondary">#94A3B8</color>
+
+    <!-- Premium Accent: Warm Gold -->
+    <color name="premium_accent">#FBBF24</color>
+</resources>
