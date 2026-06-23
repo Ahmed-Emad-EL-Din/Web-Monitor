@@ -28,6 +28,12 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
     private var pendingAiPrompt: String? = null
     private var pendingRequiresJS: Boolean = false
 
+    private val tabs = mutableListOf<WebView>()
+    private var currentTabIndex = -1
+
+    private val currentWebView: WebView?
+        get() = if (currentTabIndex in tabs.indices) tabs[currentTabIndex] else null
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -39,28 +45,103 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        binding.webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                CookieManager.getInstance().flush()
+        binding.toolbar.inflateMenu(R.menu.browser_menu)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_history -> {
+                    HistoryBottomSheet().show(childFragmentManager, "HistoryBottomSheet")
+                    true
+                }
+                R.id.action_passwords -> {
+                    PasswordsBottomSheet().show(childFragmentManager, "PasswordsBottomSheet")
+                    true
+                }
+                R.id.action_captcha -> {
+                    CaptchaBottomSheet().show(childFragmentManager, "CaptchaBottomSheet")
+                    true
+                }
+                else -> false
             }
         }
-        binding.webView.settings.javaScriptEnabled = true
-        binding.webView.addJavascriptInterface(WebAppInterface { selector, text ->
-            onElementSelectedFromJs(selector, text)
-        }, "Android")
-        
-        binding.webView.loadUrl("https://www.google.com")
+
+        binding.btnBack.setOnClickListener {
+            if (currentWebView?.canGoBack() == true) {
+                currentWebView?.goBack()
+            }
+        }
+
+        binding.btnForward.setOnClickListener {
+            if (currentWebView?.canGoForward() == true) {
+                currentWebView?.goForward()
+            }
+        }
+
+        binding.btnRefresh.setOnClickListener {
+            currentWebView?.reload()
+        }
+
+        binding.btnTabs.setOnClickListener {
+            addNewTab("https://www.google.com")
+            Toast.makeText(requireContext(), "Opened new tab", Toast.LENGTH_SHORT).show()
+        }
 
         binding.fabTrack.setOnClickListener {
             val bottomSheet = TrackingBottomSheet()
             bottomSheet.setTrackingListener(this)
             bottomSheet.show(parentFragmentManager, "TrackingBottomSheet")
         }
+
+        if (tabs.isEmpty()) {
+            addNewTab("https://www.google.com")
+        } else {
+            showTab(currentTabIndex)
+        }
+    }
+
+    private fun addNewTab(url: String) {
+        val webView = WebView(requireContext()).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            settings.javaScriptEnabled = true
+            addJavascriptInterface(WebAppInterface { selector, text ->
+                onElementSelectedFromJs(selector, text)
+            }, "Android")
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    CookieManager.getInstance().flush()
+                    if (this@apply == currentWebView) {
+                        binding.tvUrl.text = url
+                    }
+                    
+                    url?.let {
+                        val pageTitle = view?.title
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val db = AppDatabase.getDatabase(requireContext())
+                            db.browsingHistoryDao().insert(com.example.data.BrowsingHistory(url = it, title = pageTitle))
+                        }
+                    }
+                }
+            }
+        }
+        tabs.add(webView)
+        showTab(tabs.size - 1)
+        webView.loadUrl(url)
+    }
+
+    private fun showTab(index: Int) {
+        if (index !in tabs.indices) return
+        currentTabIndex = index
+        binding.webViewContainer.removeAllViews()
+        val webView = tabs[index]
+        binding.webViewContainer.addView(webView)
+        binding.tvUrl.text = webView.url ?: "Loading..."
     }
 
     override fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean) {
-        val currentUrl = binding.webView.url ?: return
+        val currentUrl = currentWebView?.url ?: return
         saveRule(
             TrackingRule(
                 url = currentUrl,
@@ -120,13 +201,13 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
                 document.addEventListener('click', handler, true);
             })();
         """.trimIndent()
-        binding.webView.evaluateJavascript(js, null)
+        currentWebView?.evaluateJavascript(js, null)
     }
 
     private fun onElementSelectedFromJs(selector: String, text: String) {
         lifecycleScope.launch(Dispatchers.Main) {
             binding.bannerContainer.visibility = View.GONE
-            val currentUrl = binding.webView.url ?: return@launch
+            val currentUrl = currentWebView?.url ?: return@launch
             saveRule(
                 TrackingRule(
                     url = currentUrl,
@@ -164,6 +245,14 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "Tracking rule saved!", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    fun loadUrl(url: String) {
+        if (currentWebView == null) {
+            addNewTab(url)
+        } else {
+            currentWebView?.loadUrl(url)
         }
     }
 

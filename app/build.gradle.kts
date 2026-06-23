@@ -97,6 +97,7 @@ dependencies {
   implementation(libs.material)
   implementation(libs.androidx.appcompat)
   implementation(libs.androidx.security.crypto)
+  implementation("androidx.biometric:biometric:1.1.0")
   implementation(libs.generative.ai)
   implementation("io.ktor:ktor-client-core:2.3.11")
   implementation("io.ktor:ktor-client-android:2.3.11")
