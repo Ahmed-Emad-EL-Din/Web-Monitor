@@ -54,7 +54,7 @@ class TrackingWorker(
             if (rule.requiresJS) {
                 htmlBody = fetchWithWebView(rule.url)
             } else {
-                htmlBody = fetchWithOkHttp(rule.url) ?: ""
+                htmlBody = fetchWithOkHttp(rule.url, rule, db) ?: ""
             }
 
             if (htmlBody.isEmpty()) {
@@ -144,21 +144,66 @@ class TrackingWorker(
         }
     }
 
-    private fun fetchWithOkHttp(url: String): String? {
+    private suspend fun fetchWithOkHttp(url: String, rule: TrackingRule, db: AppDatabase): String? {
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .cookieJar(WebViewCookieJar())
             .build()
 
-        val request = Request.Builder()
+        var csrfToken = ""
+        try {
+            val initialRequest = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .build()
+            val initialResponse = client.newCall(initialRequest).execute()
+            if (initialResponse.isSuccessful) {
+                val bodyHtml = initialResponse.peekBody(Long.MAX_VALUE).string()
+                val doc = Jsoup.parse(bodyHtml)
+                csrfToken = doc.select("meta[name=csrf-token]").attr("content")
+            }
+        } catch (e: Exception) {
+            // Ignore error from initial pre-flight
+        }
+
+        val requestBuilder = Request.Builder()
             .url(url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-            .build()
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Origin", extractBaseUrl(url))
+            .header("Referer", url)
+
+        if (csrfToken.isNotEmpty()) {
+            requestBuilder.header("X-CSRF-TOKEN", csrfToken)
+        }
         
+        val request = requestBuilder.build()
         val response = client.newCall(request).execute()
+        
+        if (response.code == 419 || response.code == 409) {
+            val fails = rule.failedChecksCount + 1
+            if (fails >= 3) {
+                 db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails, isActive = false))
+                 sendNotification(rule.id, "Session Expired", "Please log in to $url to resume tracking.")
+                 return null
+            } else {
+                 db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails))
+                 return fetchWithWebView(url)
+            }
+        }
+
         if (!response.isSuccessful) return null
         return response.body?.string()
+    }
+    
+    private fun extractBaseUrl(url: String): String {
+        try {
+            val configUrl = java.net.URL(url)
+            return "${configUrl.protocol}://${configUrl.host}"
+        } catch (e: Exception) {
+            return url
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
