@@ -58,4 +58,13 @@
         android:backgroundTint="@color/primary_accent"
         app:layout_constraintTop_toBottomOf="@id/til_model"/>
 
+    <Button
+        android:id="@+id/btn_battery_opt"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Allow Background Work (Battery Opt)"
+        app:layout_constraintTop_toBottomOf="@id/btn_test_connection" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

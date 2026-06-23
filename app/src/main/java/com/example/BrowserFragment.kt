@@ -26,6 +26,7 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
     private var pendingSyncFreq: Int = 15
     private var pendingIsPremium: Boolean = false
     private var pendingAiPrompt: String? = null
+    private var pendingRequiresJS: Boolean = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -58,25 +59,27 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
         }
     }
 
-    override fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?) {
+    override fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean) {
         val currentUrl = binding.webView.url ?: return
         saveRule(
             TrackingRule(
                 url = currentUrl,
                 cssSelector = null,
-                lastKnownText = "", // Or fetch body text
                 isTrackWholePage = true,
+                syncFrequencyMin = syncFreqMin,
                 isPremiumRule = isPremium,
                 aiConditionPrompt = aiPrompt,
-                syncFrequencyMin = syncFreqMin
+                lastKnownText = "", // Or fetch body text
+                requiresJS = requiresJS
             )
         )
     }
 
-    override fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?) {
+    override fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean) {
         pendingSyncFreq = syncFreqMin
         pendingIsPremium = isPremium
         pendingAiPrompt = aiPrompt
+        pendingRequiresJS = requiresJS
 
         binding.bannerContainer.visibility = View.VISIBLE
         injectInspectorJs()
@@ -128,11 +131,12 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
                 TrackingRule(
                     url = currentUrl,
                     cssSelector = selector,
-                    lastKnownText = text.take(100), // Optional truncate
                     isTrackWholePage = false,
+                    syncFrequencyMin = pendingSyncFreq,
                     isPremiumRule = pendingIsPremium,
                     aiConditionPrompt = pendingAiPrompt,
-                    syncFrequencyMin = pendingSyncFreq
+                    lastKnownText = text.take(100), // Optional truncate
+                    requiresJS = pendingRequiresJS
                 )
             )
         }

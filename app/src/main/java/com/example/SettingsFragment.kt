@@ -1,6 +1,12 @@
 package com.example
 
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -52,6 +58,30 @@ class SettingsFragment : Fragment() {
 
             testConnection(key, modelName)
         }
+
+        binding.btnBatteryOpt.setOnClickListener {
+            requestBatteryOptimization()
+        }
+    }
+
+    private fun requestBatteryOptimization() {
+        val powerManager = requireContext().getSystemService(Context.POWER_SERVICE) as PowerManager
+        val packageName = requireContext().packageName
+
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            AlertDialog.Builder(requireContext())
+                .setTitle("Background Tracking")
+                .setMessage("To ensure tracking works consistently in the background, we need to bypass battery optimizations. Please allow this in the next screen.")
+                .setPositiveButton("OK") { _, _ ->
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    intent.data = Uri.parse("package:$packageName")
+                    startActivity(intent)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            Toast.makeText(requireContext(), "Battery Optimization already disabled.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun testConnection(apiKey: String, modelName: String) {
@@ -75,7 +105,6 @@ class SettingsFragment : Fragment() {
 
     private fun showSuccess(message: String) {
         val toast = Toast.makeText(context, message, Toast.LENGTH_LONG)
-        // basic toast, customization might require custom toast layout
         toast.show()
     }
 

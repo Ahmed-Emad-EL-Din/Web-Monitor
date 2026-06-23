@@ -15,8 +15,8 @@ class TrackingBottomSheet : BottomSheetDialogFragment() {
     private var listener: TrackingListener? = null
 
     interface TrackingListener {
-        fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?)
-        fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?)
+        fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean)
+        fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean)
     }
 
     fun setTrackingListener(listener: TrackingListener) {
@@ -48,7 +48,8 @@ class TrackingBottomSheet : BottomSheetDialogFragment() {
             listener?.onTrackWholePage(
                 getSyncFreq(),
                 binding.switchPremium.isChecked,
-                binding.etAiPrompt.text?.toString()
+                binding.etAiPrompt.text?.toString(),
+                binding.cbRequiresJs.isChecked
             )
             dismiss()
         }
@@ -57,7 +58,8 @@ class TrackingBottomSheet : BottomSheetDialogFragment() {
             listener?.onTrackElements(
                 getSyncFreq(),
                 binding.switchPremium.isChecked,
-                binding.etAiPrompt.text?.toString()
+                binding.etAiPrompt.text?.toString(),
+                binding.cbRequiresJs.isChecked
             )
             dismiss()
         }

@@ -19,4 +19,10 @@ interface TrackingRuleDao {
 
     @Query("UPDATE tracking_rules SET lastKnownText = :newText WHERE id = :id")
     suspend fun updateRuleText(id: Int, newText: String)
+
+    @androidx.room.Delete
+    suspend fun deleteRule(rule: TrackingRule)
+
+    @androidx.room.Update
+    suspend fun updateRule(rule: TrackingRule)
 }
