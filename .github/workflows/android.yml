@@ -30,13 +30,19 @@ jobs:
           if [ ! -f debug.keystore ]; then
             keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
           fi
-
+          
       - name: Create Placeholder Env File
         run: |
           echo "GEMINI_API_KEY=dummy_key" > .env
-
+          
       - name: Build with Gradle
         run: gradle assembleDebug --stacktrace
 
       - name: Run Unit Tests
         run: gradle testDebugUnitTest --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk

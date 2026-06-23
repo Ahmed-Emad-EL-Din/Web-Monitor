@@ -50,7 +50,8 @@ class TrackingWorker(
         val appPrefs = AppPreferences(applicationContext)
         if (!appPrefs.isGlobalTrackingEnabled) return@withContext Result.success()
 
-        if (!rule.isActive) return@withContext Result.success()
+        val isManualSync = inputData.getBoolean("IS_MANUAL_SYNC", false)
+        if (!rule.isActive && !isManualSync) return@withContext Result.success()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = android.app.NotificationChannel(
@@ -79,41 +80,43 @@ class TrackingWorker(
             setForeground(foregroundInfo)
         } catch (e: Exception) {}
 
-        val updatedRule = rule.copy(lastChecked = System.currentTimeMillis())
+        val currentTime = System.currentTimeMillis()
+        var updatedRule = rule.copy(lastChecked = currentTime)
         db.trackingRuleDao().updateRule(updatedRule)
 
         try {
             var htmlBody = ""
-            if (rule.requiresJS) {
-                htmlBody = fetchWithWebView(rule.url)
+            if (updatedRule.requiresJS) {
+                htmlBody = fetchWithWebView(updatedRule.url)
             } else {
-                htmlBody = fetchWithOkHttp(rule.url, rule, db) ?: ""
+                htmlBody = fetchWithOkHttp(updatedRule.url, updatedRule, db) ?: ""
             }
 
             if (htmlBody.isEmpty()) {
-                return@withContext handleBrokenRule(rule, db)
+                return@withContext handleBrokenRule(updatedRule, db, "Failed to load page content. Server may be blocking the request.")
             }
 
             val doc = Jsoup.parse(htmlBody)
             var newTextRaw = ""
             
-            if (rule.isTrackWholePage) {
+            if (updatedRule.isTrackWholePage) {
                 newTextRaw = doc.text()
             } else {
-                val element = doc.select(rule.cssSelector ?: "").firstOrNull()
+                val element = doc.select(updatedRule.cssSelector ?: "").firstOrNull()
                 if (element == null) {
-                    return@withContext handleBrokenRule(rule, db)
+                    return@withContext handleBrokenRule(updatedRule, db, "Layout changed. Element not found. Tap to re-select.")
                 }
                 newTextRaw = element.text() ?: ""
             }
 
             // Normal successful logic
-            if (rule.failedChecksCount > 0) {
-                db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = 0))
+            if (updatedRule.failedChecksCount > 0) {
+                updatedRule = updatedRule.copy(failedChecksCount = 0)
+                db.trackingRuleDao().updateRule(updatedRule)
             }
 
             val newText = Jsoup.parse(newTextRaw).text()
-            val oldText = Jsoup.parse(rule.lastKnownText).text()
+            val oldText = Jsoup.parse(updatedRule.lastKnownText).text()
 
             if (newText == oldText) {
                 val outputData = androidx.work.workDataOf("HAS_CHANGES" to false)
@@ -122,7 +125,7 @@ class TrackingWorker(
 
             var aiSummaryOutput: String? = null
 
-            if (!rule.isPremiumRule) {
+            if (!updatedRule.isPremiumRule) {
                 val notificationText = "Update: Changed from \n\n${oldText.take(50)}...\n\n to \n\n${newText.take(50)}...\n\n"
                 sendNotification(ruleId, "Rule ${rule.id} Updated", notificationText)
                 sendTelegramNotifications(ruleId, notificationText, db)
@@ -136,7 +139,7 @@ class TrackingWorker(
                         apiKey = apiKey
                     )
                     
-                    val aiPrompt = "Old Content: '${oldText}'. New Content: '${newText}'. Condition: '${rule.aiConditionPrompt}'. If condition NOT met, reply 'IGNORE'. If met, reply 'TRIGGER: \n\n$$ 1-sentence summary of change $$\\n\\n'."
+                    val aiPrompt = "Old Content: '${oldText}'. New Content: '${newText}'. Condition: '${updatedRule.aiConditionPrompt}'. If condition NOT met, reply 'IGNORE'. If met, reply 'TRIGGER: \n\n$$ 1-sentence summary of change $$\\n\\n'."
                     
                     val aiResponse = generativeModel.generateContent(aiPrompt)
                     val reply = aiResponse.text?.trim() ?: "IGNORE"
@@ -169,11 +172,11 @@ class TrackingWorker(
         }
     }
 
-    private suspend fun handleBrokenRule(rule: TrackingRule, db: AppDatabase): Result {
+    private suspend fun handleBrokenRule(rule: TrackingRule, db: AppDatabase, errorReason: String = "Layout changed. Tap to re-select."): Result {
         val fails = rule.failedChecksCount + 1
         if (fails >= 3) {
             db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails, isActive = false))
-            sendNotification(rule.id, "Tracker Broken: ${rule.url}", "Layout changed. Tap to re-select.")
+            sendNotification(rule.id, "Tracker Broken: ${rule.url}", errorReason)
             return Result.failure()
         } else {
             db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails))
@@ -188,34 +191,13 @@ class TrackingWorker(
             .cookieJar(WebViewCookieJar())
             .build()
 
-        var csrfToken = ""
-        try {
-            val initialRequest = Request.Builder()
-                .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                .build()
-            val initialResponse = client.newCall(initialRequest).execute()
-            if (initialResponse.isSuccessful) {
-                val bodyHtml = initialResponse.peekBody(Long.MAX_VALUE).string()
-                val doc = Jsoup.parse(bodyHtml)
-                csrfToken = doc.select("meta[name=csrf-token]").attr("content")
-            }
-        } catch (e: Exception) {
-            // Ignore error from initial pre-flight
-        }
-
-        val requestBuilder = Request.Builder()
+        val request = Request.Builder()
             .url(url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Origin", extractBaseUrl(url))
-            .header("Referer", url)
-
-        if (csrfToken.isNotEmpty()) {
-            requestBuilder.header("X-CSRF-TOKEN", csrfToken)
-        }
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            .header("Accept-Language", "en-US,en;q=0.5")
+            .build()
         
-        val request = requestBuilder.build()
         val response = client.newCall(request).execute()
         
         if (response.code == 419 || response.code == 409) {

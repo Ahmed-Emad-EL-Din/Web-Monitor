@@ -61,7 +61,7 @@ class DashboardFragment : Fragment() {
             },
             onForceSyncClicked = { rule, onComplete ->
                 val workRequest = OneTimeWorkRequestBuilder<TrackingWorker>()
-                    .setInputData(androidx.work.workDataOf("RULE_ID" to rule.id))
+                    .setInputData(androidx.work.workDataOf("RULE_ID" to rule.id, "IS_MANUAL_SYNC" to true))
                     .build()
                 
                 WorkManager.getInstance(requireContext()).enqueue(workRequest)
