@@ -33,4 +33,12 @@ class AppPreferences(context: Context) {
     var isGlobalTrackingEnabled: Boolean
         get() = sharedPreferences.getBoolean("GLOBAL_TRACKING", true)
         set(value) = sharedPreferences.edit().putBoolean("GLOBAL_TRACKING", value).apply()
+
+    var telegramBotToken: String?
+        get() = sharedPreferences.getString("TELEGRAM_BOT_TOKEN", null)
+        set(value) = sharedPreferences.edit().putString("TELEGRAM_BOT_TOKEN", value).apply()
+
+    var telegramBotUsername: String?
+        get() = sharedPreferences.getString("TELEGRAM_BOT_USERNAME", null)
+        set(value) = sharedPreferences.edit().putString("TELEGRAM_BOT_USERNAME", value).apply()
 }

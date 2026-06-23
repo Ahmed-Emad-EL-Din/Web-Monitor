@@ -27,6 +27,7 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
     private var pendingIsPremium: Boolean = false
     private var pendingAiPrompt: String? = null
     private var pendingRequiresJS: Boolean = false
+    private var pendingListenerIds: List<Int> = emptyList()
 
     private val tabs = mutableListOf<WebView>()
     private var currentTabIndex = -1
@@ -140,7 +141,7 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
         binding.tvUrl.text = webView.url ?: "Loading..."
     }
 
-    override fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean) {
+    override fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean, listenerIds: List<Int>) {
         val currentUrl = currentWebView?.url ?: return
         saveRule(
             TrackingRule(
@@ -152,15 +153,17 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
                 aiConditionPrompt = aiPrompt,
                 lastKnownText = "", // Or fetch body text
                 requiresJS = requiresJS
-            )
+            ),
+            listenerIds
         )
     }
 
-    override fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean) {
+    override fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean, listenerIds: List<Int>) {
         pendingSyncFreq = syncFreqMin
         pendingIsPremium = isPremium
         pendingAiPrompt = aiPrompt
         pendingRequiresJS = requiresJS
+        pendingListenerIds = listenerIds
 
         binding.bannerContainer.visibility = View.VISIBLE
         injectInspectorJs()
@@ -218,15 +221,20 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
                     aiConditionPrompt = pendingAiPrompt,
                     lastKnownText = text.take(100), // Optional truncate
                     requiresJS = pendingRequiresJS
-                )
+                ),
+                pendingListenerIds
             )
         }
     }
 
-    private fun saveRule(rule: TrackingRule) {
+    private fun saveRule(rule: TrackingRule, listenerIds: List<Int>) {
         lifecycleScope.launch(Dispatchers.IO) {
             val db = AppDatabase.getDatabase(requireContext())
             val ruleId = db.trackingRuleDao().insertRule(rule).toInt()
+            
+            listenerIds.forEach { listenerId ->
+                db.ruleListenerCrossRefDao().insert(com.example.data.RuleListenerCrossRef(ruleId, listenerId))
+            }
             
             val workRequest = androidx.work.PeriodicWorkRequestBuilder<TrackingWorker>(
                 rule.syncFrequencyMin.toLong(), java.util.concurrent.TimeUnit.MINUTES

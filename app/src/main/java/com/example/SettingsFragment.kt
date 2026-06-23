@@ -1,7 +1,6 @@
 package com.example
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -26,7 +25,18 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import java.io.IOException
 import org.json.JSONObject
+import com.example.data.TelegramListener
+import java.util.UUID
+import androidx.recyclerview.widget.LinearLayoutManager
+import kotlinx.coroutines.delay
+
+import androidx.appcompat.app.AlertDialog
+import com.example.data.RuleListenerCrossRef
 
 class SettingsFragment : Fragment() {
 
@@ -103,6 +113,180 @@ class SettingsFragment : Fragment() {
                 type = "application/json"
             }
             importLauncher.launch(intent)
+        }
+
+        binding.etTelegramBotToken.setText(appPreferences.telegramBotToken)
+
+        binding.btnTestTelegram.setOnClickListener {
+            val token = binding.etTelegramBotToken.text.toString()
+            if (token.isBlank()) {
+                showError("Please enter a Telegram Bot Token")
+                return@setOnClickListener
+            }
+            testTelegramConnection(token)
+        }
+
+        binding.rvTelegramListeners.layoutManager = LinearLayoutManager(requireContext())
+        val telegramAdapter = TelegramListenerAdapter(
+            onDeleteClicked = { listener ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    AppDatabase.getDatabase(requireContext()).telegramListenerDao().delete(listener)
+                }
+            },
+            onItemClicked = { listener ->
+                showTrackerSelectionDialog(listener)
+            }
+        )
+        binding.rvTelegramListeners.adapter = telegramAdapter
+
+        lifecycleScope.launch {
+            AppDatabase.getDatabase(requireContext()).telegramListenerDao().getAllListeners().collect {
+                telegramAdapter.submitList(it)
+            }
+        }
+
+        binding.btnAddListener.setOnClickListener {
+            val token = appPreferences.telegramBotToken
+            val botUsername = appPreferences.telegramBotUsername
+            if (token.isNullOrBlank() || botUsername.isNullOrBlank()) {
+                showError("Please Test & Connect your bot token first")
+                return@setOnClickListener
+            }
+            startMagicLinkFlow(token, botUsername)
+        }
+    }
+
+    private fun showTrackerSelectionDialog(listener: TelegramListener) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val db = AppDatabase.getDatabase(requireContext())
+            val allRules = db.trackingRuleDao().getAllRulesList()
+            val activeRuleIds = db.ruleListenerCrossRefDao().getRulesForListener(listener.id).toSet()
+
+            val ruleNames = allRules.map { if (it.url.length > 40) it.url.take(40) + "..." else it.url }.toTypedArray()
+            val checkedItems = allRules.map { activeRuleIds.contains(it.id) }.toBooleanArray()
+
+            withContext(Dispatchers.Main) {
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Trackers for ${listener.listenerName}")
+                    .setMultiChoiceItems(ruleNames, checkedItems) { _, which, isChecked ->
+                        val rule = allRules[which]
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            if (isChecked) {
+                                db.ruleListenerCrossRefDao().insert(RuleListenerCrossRef(rule.id, listener.id))
+                            } else {
+                                db.ruleListenerCrossRefDao().delete(RuleListenerCrossRef(rule.id, listener.id))
+                            }
+                        }
+                    }
+                    .setPositiveButton("Done", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun testTelegramConnection(token: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val request = Request.Builder()
+                    .url("https://api.telegram.org/bot$token/getMe")
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string()
+                    if (response.isSuccessful && responseBody != null) {
+                        val json = JSONObject(responseBody)
+                        if (json.getBoolean("ok")) {
+                            val botUsername = json.getJSONObject("result").getString("username")
+                            withContext(Dispatchers.Main) {
+                                appPreferences.telegramBotToken = token
+                                appPreferences.telegramBotUsername = botUsername
+                                showSuccess("Connected to @$botUsername")
+                            }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                showError("Invalid token")
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            showError("Connection failed")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    showError("Error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private var isPolling = false
+
+    private fun startMagicLinkFlow(token: String, botUsername: String) {
+        val uuid = UUID.randomUUID().toString()
+        val deepLink = "tg://resolve?domain=$botUsername&start=$uuid"
+        
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)))
+        } catch (e: Exception) {
+            showError("Telegram is not installed")
+            return
+        }
+
+        if (isPolling) return
+        isPolling = true
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            var lastUpdateId = 0L
+            val client = OkHttpClient()
+
+            while (isPolling) {
+                try {
+                    val request = Request.Builder()
+                        .url("https://api.telegram.org/bot$token/getUpdates?offset=${lastUpdateId + 1}")
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        val responseBody = response.body?.string()
+                        if (response.isSuccessful && responseBody != null) {
+                            val json = JSONObject(responseBody)
+                            if (json.getBoolean("ok")) {
+                                val results = json.getJSONArray("result")
+                                for (i in 0 until results.length()) {
+                                    val update = results.getJSONObject(i)
+                                    val updateId = update.getLong("update_id")
+                                    if (updateId > lastUpdateId) lastUpdateId = updateId
+
+                                    if (update.has("message")) {
+                                        val message = update.getJSONObject("message")
+                                        val text = message.optString("text")
+                                        if (text == "/start $uuid") {
+                                            val chat = message.getJSONObject("chat")
+                                            val chatId = chat.getLong("id")
+                                            val username = chat.optString("username", chat.optString("first_name", "Unknown"))
+                                            
+                                            AppDatabase.getDatabase(requireContext()).telegramListenerDao().insert(
+                                                TelegramListener(chatId = chatId, listenerName = username)
+                                            )
+
+                                            withContext(Dispatchers.Main) {
+                                                showSuccess("Successfully Linked to $username!")
+                                            }
+                                            isPolling = false
+                                            return@launch
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignore and retry
+                }
+                delay(2000)
+            }
         }
     }
 

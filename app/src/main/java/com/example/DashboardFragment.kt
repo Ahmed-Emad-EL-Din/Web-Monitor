@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -11,7 +13,9 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.data.AppDatabase
 import com.example.data.TrackingRule
@@ -54,6 +58,44 @@ class DashboardFragment : Fragment() {
             onHistoryClicked = { rule ->
                 val bundle = Bundle().apply { putInt("ruleId", rule.id) }
                 findNavController().navigate(R.id.changeDetailsFragment, bundle)
+            },
+            onForceSyncClicked = { rule, onComplete ->
+                val workRequest = OneTimeWorkRequestBuilder<TrackingWorker>()
+                    .setInputData(androidx.work.workDataOf("RULE_ID" to rule.id))
+                    .build()
+                
+                WorkManager.getInstance(requireContext()).enqueue(workRequest)
+                
+                WorkManager.getInstance(requireContext()).getWorkInfoByIdLiveData(workRequest.id)
+                    .observe(viewLifecycleOwner) { workInfo ->
+                        if (workInfo != null && workInfo.state.isFinished) {
+                            onComplete(workInfo.state == WorkInfo.State.SUCCEEDED)
+                            if (workInfo.state == WorkInfo.State.SUCCEEDED) {
+                                val hasChanges = workInfo.outputData.getBoolean("HAS_CHANGES", false)
+                                if (hasChanges) {
+                                    Toast.makeText(requireContext(), "Update found!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(requireContext(), "Check complete. No changes.", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(requireContext(), "Check failed.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+            },
+            onDeleteClicked = { rule ->
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Delete Monitor")
+                    .setMessage("Are you sure you want to delete this tracker and all its history?")
+                    .setPositiveButton("Delete") { _, _ ->
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val db = AppDatabase.getDatabase(requireContext())
+                            db.trackingRuleDao().deleteRule(rule)
+                            WorkManager.getInstance(requireContext()).cancelUniqueWork("track_${rule.id}")
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
         )
 

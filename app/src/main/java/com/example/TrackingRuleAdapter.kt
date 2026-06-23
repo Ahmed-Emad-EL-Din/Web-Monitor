@@ -3,6 +3,7 @@ package com.example
 import android.content.Context
 import android.text.format.DateUtils
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -13,7 +14,9 @@ import java.net.URL
 
 class TrackingRuleAdapter(
     private val onSwitchChanged: (TrackingRule, Boolean) -> Unit,
-    private val onHistoryClicked: (TrackingRule) -> Unit
+    private val onHistoryClicked: (TrackingRule) -> Unit,
+    private val onForceSyncClicked: (TrackingRule, (Boolean) -> Unit) -> Unit,
+    private val onDeleteClicked: (TrackingRule) -> Unit
 ) : ListAdapter<TrackingRule, TrackingRuleAdapter.ViewHolder>(RuleDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -55,6 +58,19 @@ class TrackingRuleAdapter(
 
             binding.btnHistory.setOnClickListener {
                 onHistoryClicked(rule)
+            }
+
+            binding.btnDelete.setOnClickListener {
+                onDeleteClicked(rule)
+            }
+
+            binding.btnForceSync.setOnClickListener {
+                binding.btnForceSync.visibility = View.INVISIBLE
+                binding.progressSync.visibility = View.VISIBLE
+                onForceSyncClicked(rule) { success ->
+                    binding.progressSync.visibility = View.GONE
+                    binding.btnForceSync.visibility = View.VISIBLE
+                }
             }
         }
     }

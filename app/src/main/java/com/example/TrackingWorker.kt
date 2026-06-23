@@ -32,6 +32,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+
 class TrackingWorker(
     appContext: Context,
     workerParams: WorkerParameters
@@ -113,7 +116,8 @@ class TrackingWorker(
             val oldText = Jsoup.parse(rule.lastKnownText).text()
 
             if (newText == oldText) {
-                return@withContext Result.success() // STRICT GATE: DO NOTHING
+                val outputData = androidx.work.workDataOf("HAS_CHANGES" to false)
+                return@withContext Result.success(outputData) // STRICT GATE: DO NOTHING
             }
 
             var aiSummaryOutput: String? = null
@@ -121,6 +125,7 @@ class TrackingWorker(
             if (!rule.isPremiumRule) {
                 val notificationText = "Update: Changed from \n\n${oldText.take(50)}...\n\n to \n\n${newText.take(50)}...\n\n"
                 sendNotification(ruleId, "Rule ${rule.id} Updated", notificationText)
+                sendTelegramNotifications(ruleId, notificationText, db)
             } else {
                 val appPrefs = AppPreferences(applicationContext)
                 val apiKey = appPrefs.geminiApiKey
@@ -139,6 +144,7 @@ class TrackingWorker(
                         val summary = reply.removePrefix("TRIGGER:").replace("$$", "").trim()
                         aiSummaryOutput = summary
                         sendNotification(ruleId, "AI Alert: Rule ${rule.id}", summary)
+                        sendTelegramNotifications(ruleId, summary, db)
                     }
                 }
             }
@@ -155,7 +161,8 @@ class TrackingWorker(
             )
             db.trackingHistoryDao().insertHistory(history)
 
-            Result.success()
+            val outputData = androidx.work.workDataOf("HAS_CHANGES" to true)
+            Result.success(outputData)
         } catch (e: Exception) {
             Log.e("TrackingWorker", "Exception in worker: ", e)
             Result.retry()
@@ -300,5 +307,36 @@ class TrackingWorker(
             .build()
 
         manager.notify(ruleId, notification)
+    }
+
+    private suspend fun sendTelegramNotifications(ruleId: Int, message: String, db: AppDatabase) {
+        val appPrefs = AppPreferences(applicationContext)
+        val token = appPrefs.telegramBotToken
+        if (token.isNullOrBlank()) return
+
+        val listenerIds = db.ruleListenerCrossRefDao().getListenersForRule(ruleId)
+        if (listenerIds.isEmpty()) return
+
+        val listeners = db.telegramListenerDao().getAllListenersList().filter { it.id in listenerIds }
+
+        val client = OkHttpClient()
+        val mediaType = "application/json".toMediaType()
+        for (listener in listeners) {
+            val json = org.json.JSONObject().apply {
+                put("chat_id", listener.chatId)
+                put("text", message)
+            }
+            val body = json.toString().toRequestBody(mediaType)
+            val request = Request.Builder()
+                .url("https://api.telegram.org/bot$token/sendMessage")
+                .post(body)
+                .build()
+
+            try {
+                client.newCall(request).execute().use { }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 }

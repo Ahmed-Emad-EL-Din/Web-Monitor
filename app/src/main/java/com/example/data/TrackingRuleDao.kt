@@ -11,6 +11,9 @@ interface TrackingRuleDao {
     @Query("SELECT * FROM tracking_rules")
     fun getAllRules(): Flow<List<TrackingRule>>
 
+    @Query("SELECT * FROM tracking_rules")
+    suspend fun getAllRulesList(): List<TrackingRule>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRule(rule: TrackingRule): Long
 

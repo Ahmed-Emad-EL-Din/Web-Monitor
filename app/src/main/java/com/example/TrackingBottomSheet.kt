@@ -5,18 +5,25 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.CheckBox
+import androidx.lifecycle.lifecycleScope
+import com.example.data.AppDatabase
 import com.example.databinding.BottomSheetTrackingBinding
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TrackingBottomSheet : BottomSheetDialogFragment() {
 
     private var _binding: BottomSheetTrackingBinding? = null
     private val binding get() = _binding!!
     private var listener: TrackingListener? = null
+    private val selectedListenerIds = mutableSetOf<Int>()
 
     interface TrackingListener {
-        fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean)
-        fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean)
+        fun onTrackWholePage(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean, listenerIds: List<Int>)
+        fun onTrackElements(syncFreqMin: Int, isPremium: Boolean, aiPrompt: String?, requiresJS: Boolean, listenerIds: List<Int>)
     }
 
     fun setTrackingListener(listener: TrackingListener) {
@@ -44,12 +51,15 @@ class TrackingBottomSheet : BottomSheetDialogFragment() {
             binding.tilAiPrompt.visibility = if (isChecked) View.VISIBLE else View.GONE
         }
 
+        loadTelegramListeners()
+
         binding.btnTrackWhole.setOnClickListener {
             listener?.onTrackWholePage(
                 getSyncFreq(),
                 binding.switchPremium.isChecked,
                 binding.etAiPrompt.text?.toString(),
-                binding.cbRequiresJs.isChecked
+                binding.cbRequiresJs.isChecked,
+                selectedListenerIds.toList()
             )
             dismiss()
         }
@@ -59,9 +69,36 @@ class TrackingBottomSheet : BottomSheetDialogFragment() {
                 getSyncFreq(),
                 binding.switchPremium.isChecked,
                 binding.etAiPrompt.text?.toString(),
-                binding.cbRequiresJs.isChecked
+                binding.cbRequiresJs.isChecked,
+                selectedListenerIds.toList()
             )
             dismiss()
+        }
+    }
+
+    private fun loadTelegramListeners() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val db = AppDatabase.getDatabase(requireContext())
+            db.telegramListenerDao().getAllListeners().collect { listeners ->
+                withContext(Dispatchers.Main) {
+                    if (listeners.isNotEmpty()) {
+                        binding.tvTelegramListenersTitle.visibility = View.VISIBLE
+                        binding.llTelegramListeners.removeAllViews()
+                        listeners.forEach { listener ->
+                            val cb = CheckBox(requireContext())
+                            cb.text = listener.listenerName
+                            cb.setOnCheckedChangeListener { _, isChecked ->
+                                if (isChecked) selectedListenerIds.add(listener.id)
+                                else selectedListenerIds.remove(listener.id)
+                            }
+                            binding.llTelegramListeners.addView(cb)
+                        }
+                    } else {
+                        binding.tvTelegramListenersTitle.visibility = View.GONE
+                        binding.llTelegramListeners.removeAllViews()
+                    }
+                }
+            }
         }
     }
 

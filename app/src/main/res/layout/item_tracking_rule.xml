@@ -25,7 +25,7 @@
             android:textColor="@color/text_primary"
             android:textSize="16sp"
             android:textStyle="bold"
-            app:layout_constraintEnd_toStartOf="@+id/switch_active"
+            app:layout_constraintEnd_toStartOf="@+id/btn_force_sync"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
@@ -36,6 +36,28 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="@+id/tv_url" />
+
+        <ImageButton
+            android:id="@+id/btn_force_sync"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_popup_sync"
+            android:contentDescription="Force Sync Now"
+            app:tint="@color/primary_accent"
+            app:layout_constraintEnd_toStartOf="@id/switch_active"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="@+id/tv_url" />
+
+        <ProgressBar
+            android:id="@+id/progress_sync"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toStartOf="@id/switch_active"
+            app:layout_constraintStart_toStartOf="@id/btn_force_sync"
+            app:layout_constraintTop_toTopOf="@id/btn_force_sync"
+            app:layout_constraintBottom_toBottomOf="@id/btn_force_sync" />
 
         <TextView
             android:id="@+id/tv_sync_freq"
@@ -69,6 +91,17 @@
             android:textColor="@color/primary_accent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tv_last_checked" />
+
+        <ImageButton
+            android:id="@+id/btn_delete"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_delete"
+            android:contentDescription="Delete Monitor"
+            app:tint="#F44336"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>
