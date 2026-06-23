@@ -67,4 +67,22 @@
         android:text="Allow Background Work (Battery Opt)"
         app:layout_constraintTop_toBottomOf="@id/btn_test_connection" />
 
+    <Button
+        android:id="@+id/btn_export_data"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Export Data"
+        app:layout_constraintTop_toBottomOf="@id/btn_battery_opt" />
+
+    <Button
+        android:id="@+id/btn_import_data"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Import Data"
+        app:layout_constraintTop_toBottomOf="@id/btn_export_data" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

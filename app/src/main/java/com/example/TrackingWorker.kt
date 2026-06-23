@@ -44,7 +44,37 @@ class TrackingWorker(
         val db = AppDatabase.getDatabase(applicationContext)
         val rule = db.trackingRuleDao().getRuleById(ruleId) ?: return@withContext Result.failure()
 
+        val appPrefs = AppPreferences(applicationContext)
+        if (!appPrefs.isGlobalTrackingEnabled) return@withContext Result.success()
+
         if (!rule.isActive) return@withContext Result.success()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                "web_monitor_fg",
+                "Background Tasks",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+        val notification = NotificationCompat.Builder(applicationContext, "web_monitor_fg")
+            .setContentTitle("Web Monitor")
+            .setContentText("Checking URLs in background...")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+            
+        val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            androidx.work.ForegroundInfo(101, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            androidx.work.ForegroundInfo(101, notification)
+        }
+        
+        try {
+            setForeground(foregroundInfo)
+        } catch (e: Exception) {}
 
         val updatedRule = rule.copy(lastChecked = System.currentTimeMillis())
         db.trackingRuleDao().updateRule(updatedRule)
