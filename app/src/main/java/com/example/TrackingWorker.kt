@@ -148,8 +148,12 @@ class TrackingWorker(
                         if (reply.startsWith("TRIGGER")) {
                             val summary = reply.removePrefix("TRIGGER:").replace("$$", "").trim()
                             aiSummaryOutput = summary
-                            sendNotification(ruleId, "AI Alert: Rule ${rule.id}", summary)
-                            sendTelegramNotifications(ruleId, "AI Alert: Rule ${rule.id}\n$summary", db)
+                            
+                            val domainName = try { java.net.URL(rule.url).host.removePrefix("www.") } catch(e: Exception) { "Website" }
+                            val title = "Monitor Alert: $domainName"
+                            
+                            sendNotification(ruleId, title, summary)
+                            sendTelegramNotifications(ruleId, "🔔 [$title]\n\n$summary", db)
                             sentAiNotification = true
                         } else if (reply == "IGNORE") {
                             sentAiNotification = true // AI deliberately ignored, so don't send default
@@ -161,9 +165,11 @@ class TrackingWorker(
             }
 
             if (!updatedRule.isPremiumRule || (!sentAiNotification && aiSummaryOutput == null)) {
-                val notificationText = "Update: Changed from \n\n${oldText.take(50)}...\n\n to \n\n${newText.take(50)}...\n\n"
-                sendNotification(ruleId, "Rule ${rule.id} Updated", notificationText)
-                sendTelegramNotifications(ruleId, notificationText, db)
+                val domainName = try { java.net.URL(rule.url).host.removePrefix("www.") } catch(e: Exception) { "Website" }
+                val title = "Monitor Alert: $domainName"
+                val notificationText = "Content updated from:\n${oldText.take(50)}...\n\nTo:\n${newText.take(50)}..."
+                sendNotification(ruleId, title, notificationText)
+                sendTelegramNotifications(ruleId, "🔔 [$title]\n\n$notificationText", db)
             }
 
             db.trackingRuleDao().updateRuleText(ruleId, newTextRaw)
@@ -189,9 +195,10 @@ class TrackingWorker(
     private suspend fun handleBrokenRule(rule: TrackingRule, db: AppDatabase, errorReason: String = "Layout changed. Tap to re-select."): Result {
         val fails = rule.failedChecksCount + 1
         if (fails >= 3) {
+            val domainName = try { java.net.URL(rule.url).host.removePrefix("www.") } catch(e: Exception) { "Website" }
             db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails, isActive = false))
-            sendNotification(rule.id, "Tracker Broken: ${rule.url}", errorReason)
-            sendTelegramNotifications(rule.id, "Tracker Broken: ${rule.url}\n$errorReason", db)
+            sendNotification(rule.id, "Tracker Broken: $domainName", errorReason)
+            sendTelegramNotifications(rule.id, "❌ [Tracker Broken: $domainName]\n\n$errorReason", db)
             return Result.failure()
         } else {
             db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails))
@@ -218,9 +225,10 @@ class TrackingWorker(
         if (response.code == 419 || response.code == 409) {
             val fails = rule.failedChecksCount + 1
             if (fails >= 3) {
+                 val domainName = try { java.net.URL(rule.url).host.removePrefix("www.") } catch(e: Exception) { "Website" }
                  db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails, isActive = false))
-                 sendNotification(rule.id, "Session Expired", "Please log in to $url to resume tracking.")
-                 sendTelegramNotifications(rule.id, "Session Expired\nPlease log in to $url to resume tracking.", db)
+                 sendNotification(rule.id, "Session Expired: $domainName", "Please log in to $domainName to resume tracking.")
+                 sendTelegramNotifications(rule.id, "⚠️ [Session Expired: $domainName]\n\nPlease log in to the website to resume tracking.", db)
                  return null
             } else {
                  db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails))
