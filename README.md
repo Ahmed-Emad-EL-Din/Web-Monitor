@@ -1,21 +1,50 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 🌐 Web Monitor & AI Tracker
 
-# Run and deploy your AI Studio app
+A powerful, automated Android application designed to track website changes, summarize content updates using **Gemini AI**, and deliver real-time alerts via **System Notifications** and **Telegram**.
 
-This contains everything you need to run your app locally.
+## ✨ Key Features
 
-View your app in AI Studio: https://ai.studio/apps/85f36f81-6b0e-4e5d-94d1-97785b2b59cf
+- **🔄 Automated Tracking:** Periodically monitors targeted websites and endpoints for structural or content changes in the background.
+- **🧠 AI-Powered Summaries:** Integrates with Google's Gemini AI to intelligently compare old and new website content, generating concise 1-sentence summaries of what actually changed.
+- **📱 Multi-Channel Alerts:** 
+  - Push Notifications directly to your Android device.
+  - **Telegram Bot Integration:** Broadcast alerts directly to personal chats or community channels.
+- **⚡ Quick Settings Tile:** Instantly toggle tracking or monitor status directly from the Android Quick Settings panel.
+- **🛡️ Smart Failure Handling:** Detects broken layouts or expired sessions (e.g., login requirements) and automatically suspends tracking to save resources, notifying you immediately.
+- **🎯 Custom AI Conditions:** Set specific prompt conditions for when an alert should trigger, minimizing noise and saving AI tokens.
 
-## Run Locally
+## 🚀 Getting Started
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+### Prerequisites
+- Android Studio / JDK 21
+- Google Gemini API Key
+- Telegram Bot Token (Optional, for Telegram alerts)
 
+### Installation
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/web-monitor.git
+   ```
+2. Open the project in Android Studio.
+3. Securely provide your API keys in the app's settings/preferences.
+4. Build and run the application on your device.
+
+## 🤖 Telegram Integration
+
+To enable Telegram alerts:
+1. Message `@BotFather` on Telegram to create a new bot and obtain your **Bot Token**.
+2. Add the bot to your desired channel or chat.
+3. Input the token and the target Chat ID within the app's settings.
+
+## ⚙️ CI/CD
+
+This project includes a GitHub Actions workflow (`.github/workflows/android.yml`) that automatically compiles the APK and runs unit tests on every push or pull request to the `main` branch. 
+
+## ⚖️ License & Usage
+
+**Non-Commercial / Proprietary License**
+
+This project is strictly for **personal, non-commercial use only**. You may not use this software for business, monetization, or integrate it into a commercial product without explicit written permission and a negotiated revenue-sharing agreement.
+
+Please review the full [LICENSE](LICENSE) file for complete details. If you are interested in utilizing this software for commercial purposes, please contact the developer to arrange a commercial license.
