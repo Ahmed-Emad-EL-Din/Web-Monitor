@@ -92,7 +92,11 @@ class BrowserFragment : Fragment(), TrackingBottomSheet.TrackingListener {
             bottomSheet.show(parentFragmentManager, "TrackingBottomSheet")
         }
 
-        if (tabs.isEmpty()) {
+        val urlToLoad = arguments?.getString("url")
+        if (urlToLoad != null) {
+            addNewTab(urlToLoad)
+            arguments?.remove("url")
+        } else if (tabs.isEmpty()) {
             addNewTab("https://www.google.com")
         } else {
             showTab(currentTabIndex)

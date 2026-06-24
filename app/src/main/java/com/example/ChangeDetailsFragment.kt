@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import com.example.data.AppDatabase
 import com.example.databinding.FragmentChangeDetailsBinding
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +47,10 @@ class ChangeDetailsFragment : Fragment() {
                     if (rule != null) {
                         binding.tvDetailsUrl.text = "URL: ${rule.url}"
                         binding.btnLiveView.setOnClickListener {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(rule.url))
-                            startActivity(browserIntent)
+                            val bundle = Bundle().apply {
+                                putString("url", rule.url)
+                            }
+                            findNavController().navigate(R.id.browserFragment, bundle)
                         }
                     }
                     if (history != null) {

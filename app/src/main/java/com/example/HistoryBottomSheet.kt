@@ -28,7 +28,10 @@ class HistoryBottomSheet : BottomSheetDialogFragment() {
         
         val rvHistory = view.findViewById<RecyclerView>(R.id.rv_history)
         rvHistory.layoutManager = LinearLayoutManager(requireContext())
-        val adapter = HistoryAdapter()
+        val adapter = HistoryAdapter { url ->
+            (parentFragment as? BrowserFragment)?.loadUrl(url)
+            dismiss()
+        }
         rvHistory.adapter = adapter
         
         lifecycleScope.launch {
@@ -39,7 +42,9 @@ class HistoryBottomSheet : BottomSheetDialogFragment() {
         }
     }
 
-    class HistoryAdapter : androidx.recyclerview.widget.ListAdapter<BrowsingHistory, HistoryAdapter.ViewHolder>(
+    class HistoryAdapter(
+        private val onItemClick: (String) -> Unit
+    ) : androidx.recyclerview.widget.ListAdapter<BrowsingHistory, HistoryAdapter.ViewHolder>(
         object : androidx.recyclerview.widget.DiffUtil.ItemCallback<BrowsingHistory>() {
             override fun areItemsTheSame(oldItem: BrowsingHistory, newItem: BrowsingHistory) = oldItem.id == newItem.id
             override fun areContentsTheSame(oldItem: BrowsingHistory, newItem: BrowsingHistory) = oldItem == newItem
@@ -59,6 +64,9 @@ class HistoryBottomSheet : BottomSheetDialogFragment() {
             val item = getItem(position)
             holder.tvTitle.text = item.title ?: item.url
             holder.tvUrl.text = item.url
+            holder.itemView.setOnClickListener {
+                onItemClick(item.url)
+            }
         }
     }
 }

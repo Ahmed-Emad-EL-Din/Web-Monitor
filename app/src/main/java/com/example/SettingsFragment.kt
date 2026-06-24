@@ -223,17 +223,41 @@ class SettingsFragment : Fragment() {
     }
 
     private var isPolling = false
+    private var pollingDialog: AlertDialog? = null
 
     private fun startMagicLinkFlow(token: String, botUsername: String) {
         val uuid = UUID.randomUUID().toString()
-        val deepLink = "tg://resolve?domain=$botUsername&start=$uuid"
+        val tgLink = "tg://resolve?domain=$botUsername&start=$uuid"
+        val httpsLink = "https://t.me/$botUsername?start=$uuid"
         
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)))
-        } catch (e: Exception) {
-            showError("Telegram is not installed")
-            return
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_add_listener, null)
+        val tvHttpsLink = dialogView.findViewById<android.widget.TextView>(R.id.tvHttpsLink)
+        val btnCopy = dialogView.findViewById<android.widget.Button>(R.id.btnCopy)
+        val btnConnectMyself = dialogView.findViewById<android.widget.Button>(R.id.btnConnectMyself)
+        
+        tvHttpsLink.text = httpsLink
+        
+        btnCopy.setOnClickListener {
+            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Telegram Link", httpsLink)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(requireContext(), "Link copied to clipboard", Toast.LENGTH_SHORT).show()
         }
+        
+        btnConnectMyself.setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(tgLink)))
+            } catch (e: Exception) {
+                showError("Telegram is not installed")
+            }
+        }
+        
+        pollingDialog = AlertDialog.Builder(requireContext())
+            .setTitle("Add Telegram Listener")
+            .setView(dialogView)
+            .setNegativeButton("Cancel") { _, _ -> isPolling = false }
+            .setOnDismissListener { isPolling = false }
+            .show()
 
         if (isPolling) return
         isPolling = true
@@ -273,6 +297,7 @@ class SettingsFragment : Fragment() {
 
                                             withContext(Dispatchers.Main) {
                                                 showSuccess("Successfully Linked to $username!")
+                                                pollingDialog?.dismiss()
                                             }
                                             isPolling = false
                                             return@launch
