@@ -149,7 +149,7 @@ class TrackingWorker(
                             val summary = reply.removePrefix("TRIGGER:").replace("$$", "").trim()
                             aiSummaryOutput = summary
                             sendNotification(ruleId, "AI Alert: Rule ${rule.id}", summary)
-                            sendTelegramNotifications(ruleId, summary, db)
+                            sendTelegramNotifications(ruleId, "AI Alert: Rule ${rule.id}\n$summary", db)
                             sentAiNotification = true
                         } else if (reply == "IGNORE") {
                             sentAiNotification = true // AI deliberately ignored, so don't send default
