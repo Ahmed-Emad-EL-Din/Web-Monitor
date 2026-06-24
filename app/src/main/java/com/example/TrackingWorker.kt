@@ -124,12 +124,9 @@ class TrackingWorker(
             }
 
             var aiSummaryOutput: String? = null
+            var sentAiNotification = false
 
-            if (!updatedRule.isPremiumRule) {
-                val notificationText = "Update: Changed from \n\n${oldText.take(50)}...\n\n to \n\n${newText.take(50)}...\n\n"
-                sendNotification(ruleId, "Rule ${rule.id} Updated", notificationText)
-                sendTelegramNotifications(ruleId, notificationText, db)
-            } else {
+            if (updatedRule.isPremiumRule) {
                 val appPrefs = AppPreferences(applicationContext)
                 val apiKey = appPrefs.geminiApiKey
                 if (!apiKey.isNullOrBlank()) {
@@ -139,17 +136,34 @@ class TrackingWorker(
                         apiKey = apiKey
                     )
                     
-                    val aiPrompt = "Old Content: '${oldText}'. New Content: '${newText}'. Condition: '${updatedRule.aiConditionPrompt}'. If condition NOT met, reply 'IGNORE'. If met, reply 'TRIGGER: \n\n$$ 1-sentence summary of change $$\\n\\n'."
+                    val aiPrompt = if (!updatedRule.aiConditionPrompt.isNullOrBlank()) {
+                        "Old Content: '${oldText}'. New Content: '${newText}'. Condition: '${updatedRule.aiConditionPrompt}'. If condition NOT met, reply 'IGNORE'. If met, reply 'TRIGGER: \n\n$$ 1-sentence summary of change $$\\n\\n'."
+                    } else {
+                        "Old Content: '${oldText}'. New Content: '${newText}'. Please provide a 1-sentence summary of the changes between the old and new content. Reply with 'TRIGGER: \n\n$$ your 1-sentence summary $$\\n\\n'."
+                    }
                     
-                    val aiResponse = generativeModel.generateContent(aiPrompt)
-                    val reply = aiResponse.text?.trim() ?: "IGNORE"
-                    if (reply.startsWith("TRIGGER")) {
-                        val summary = reply.removePrefix("TRIGGER:").replace("$$", "").trim()
-                        aiSummaryOutput = summary
-                        sendNotification(ruleId, "AI Alert: Rule ${rule.id}", summary)
-                        sendTelegramNotifications(ruleId, summary, db)
+                    try {
+                        val aiResponse = generativeModel.generateContent(aiPrompt)
+                        val reply = aiResponse.text?.trim() ?: "IGNORE"
+                        if (reply.startsWith("TRIGGER")) {
+                            val summary = reply.removePrefix("TRIGGER:").replace("$$", "").trim()
+                            aiSummaryOutput = summary
+                            sendNotification(ruleId, "AI Alert: Rule ${rule.id}", summary)
+                            sendTelegramNotifications(ruleId, summary, db)
+                            sentAiNotification = true
+                        } else if (reply == "IGNORE") {
+                            sentAiNotification = true // AI deliberately ignored, so don't send default
+                        }
+                    } catch (e: Exception) {
+                        Log.e("TrackingWorker", "AI generation failed", e)
                     }
                 }
+            }
+
+            if (!updatedRule.isPremiumRule || (!sentAiNotification && aiSummaryOutput == null)) {
+                val notificationText = "Update: Changed from \n\n${oldText.take(50)}...\n\n to \n\n${newText.take(50)}...\n\n"
+                sendNotification(ruleId, "Rule ${rule.id} Updated", notificationText)
+                sendTelegramNotifications(ruleId, notificationText, db)
             }
 
             db.trackingRuleDao().updateRuleText(ruleId, newTextRaw)
@@ -177,6 +191,7 @@ class TrackingWorker(
         if (fails >= 3) {
             db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails, isActive = false))
             sendNotification(rule.id, "Tracker Broken: ${rule.url}", errorReason)
+            sendTelegramNotifications(rule.id, "Tracker Broken: ${rule.url}\n$errorReason", db)
             return Result.failure()
         } else {
             db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails))
@@ -205,6 +220,7 @@ class TrackingWorker(
             if (fails >= 3) {
                  db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails, isActive = false))
                  sendNotification(rule.id, "Session Expired", "Please log in to $url to resume tracking.")
+                 sendTelegramNotifications(rule.id, "Session Expired\nPlease log in to $url to resume tracking.", db)
                  return null
             } else {
                  db.trackingRuleDao().updateRule(rule.copy(failedChecksCount = fails))
